@@ -210,58 +210,114 @@
       display: flex;
       align-items: stretch;
       justify-content: center;
-      padding: 12px;
-      background: rgba(0, 0, 0, 0.92);
+      padding: 16px 16px 18px;
+      background: #f6f6f7;
     }
 
     .fit-modal[hidden] { display: none; }
 
     .fit-card {
-      width: min(420px, 100%);
+      width: min(440px, 100%);
       height: 100%;
       max-height: 100%;
       margin: 0 auto;
       overflow: hidden;
-      border-radius: 20px;
+      border: 0;
+      border-radius: 0;
+      background: #f6f6f7;
+      color: #161616;
+      box-shadow: none;
     }
+
+    .fit-card h2 {
+      color: #161616;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    .fit-card .help { color: #6d6d72; }
 
     .fit-stage {
       flex: 1 1 auto;
-      min-height: 180px;
+      min-height: 0;
       width: 100%;
       display: flex;
       align-items: center;
       justify-content: center;
+    }
+
+    .crop-window {
+      position: relative;
+      width: min(100%, calc((100dvh - 320px) * 0.75));
+      aspect-ratio: 3 / 4;
+      background: #ececee;
+      touch-action: none;
       cursor: grab;
-      touch-action: none;
     }
 
-    .fit-stage.is-dragging { cursor: grabbing; }
+    .crop-window.is-dragging { cursor: grabbing; }
 
-    .fit-stage canvas {
-      height: 100%;
-      width: auto;
-      max-width: 100%;
-      max-height: 100%;
-      border-radius: 16px;
-      touch-action: none;
-    }
-
-    .fit-zoom {
-      display: grid;
-      grid-template-columns: auto 1fr;
-      gap: 12px;
-      align-items: center;
-      color: rgba(255, 255, 255, 0.8);
-      font-size: 13px;
-      font-weight: 700;
-    }
-
-    .fit-zoom input {
+    .crop-window canvas {
       width: 100%;
-      accent-color: #25f4ee;
+      height: 100%;
+      border-radius: 0;
+      display: block;
+      touch-action: none;
     }
 
+    .corner {
+      position: absolute;
+      width: 28px;
+      height: 28px;
+      border: 2.5px solid #1c1c1e;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .corner.tl { top: -2px; left: -2px; border-right: 0; border-bottom: 0; }
+    .corner.tr { top: -2px; right: -2px; border-left: 0; border-bottom: 0; }
+    .corner.bl { bottom: -2px; left: -2px; border-right: 0; border-top: 0; }
+    .corner.br { bottom: -2px; right: -2px; border-left: 0; border-top: 0; }
+
+    .crop-tools {
+      display: grid;
+      grid-template-columns: 46px 1fr 46px;
+      gap: 14px;
+      align-items: center;
+      padding: 4px 8px;
+    }
+
+    .crop-round {
+      width: 46px;
+      height: 46px;
+      border: 0;
+      border-radius: 50%;
+      background: #fff;
+      color: #1c1c1e;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
+      font-size: 26px;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .crop-tools input[type="range"] {
+      width: 100%;
+      accent-color: #1c1c1e;
+    }
+
+    .fit-card .btn-primary {
+      background: #1c1c1e;
+      color: #fff;
+      box-shadow: none;
+    }
+
+    .fit-card .btn-ghost {
+      color: #3a3a3c;
+      border-color: transparent;
+      background: transparent;
+    }
 
     .modal-card {
       width: 100%;
@@ -274,6 +330,13 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
+    }
+
+    .modal-card.fit-card {
+      background: #f6f6f7;
+      border: 0;
+      color: #161616;
+      box-shadow: none;
     }
 
     .modal-card h2 {
@@ -343,13 +406,21 @@
   <div id="fit" class="modal fit-modal" hidden>
     <div class="modal-card fit-card" role="dialog" aria-modal="true" aria-labelledby="fit-title">
       <h2 id="fit-title">Ajuste o recorte</h2>
-      <p class="help">Arraste a foto para encaixar. A moldura fica fixa.</p>
+      <p class="help">Arraste a foto para encaixar no centro da moldura.</p>
       <div id="fit-stage" class="fit-stage">
-        <canvas id="fit-canvas" width="768" height="1024" aria-label="Arraste a foto dentro da moldura"></canvas>
+        <div id="crop-window" class="crop-window">
+          <canvas id="fit-canvas" width="768" height="1024" aria-label="Arraste a foto dentro do recorte"></canvas>
+          <span class="corner tl"></span>
+          <span class="corner tr"></span>
+          <span class="corner bl"></span>
+          <span class="corner br"></span>
+        </div>
       </div>
-      <label class="fit-zoom">Zoom
+      <div class="crop-tools">
+        <button id="fit-minus" class="crop-round" type="button" aria-label="Diminuir zoom">−</button>
         <input id="fit-zoom" type="range" min="1" max="3" step="0.01" value="1" aria-label="Zoom do recorte">
-      </label>
+        <button id="fit-plus" class="crop-round" type="button" aria-label="Aumentar zoom">+</button>
+      </div>
       <button id="fit-create" class="btn btn-primary" type="button">Criar imagem</button>
       <button id="fit-cancel" class="btn btn-ghost" type="button">Cancelar</button>
     </div>
@@ -383,7 +454,7 @@
     const statusEl = document.getElementById("status");
     const modal = document.getElementById("modal");
     const fitModal = document.getElementById("fit");
-    const fitStage = document.getElementById("fit-stage");
+    const fitStage = document.getElementById("crop-window");
     const fitCanvas = document.getElementById("fit-canvas");
     const fitCtx = fitCanvas.getContext("2d");
     const resultImg = document.getElementById("result");
@@ -610,8 +681,18 @@
 
 
     function paintFit() {
-      if (!frameImg || !maskCanvas || !draft) return;
-      draw(fitCtx, fitCanvas.width, fitCanvas.height, draft);
+      if (!draft) return;
+      const ctx = fitCtx;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, fitCanvas.width, fitCanvas.height);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      const scale = coverScale(BASE_W, BASE_H, draft) * zoom;
+      ctx.save();
+      ctx.translate(BASE_W / 2 + panX, BASE_H / 2 + panY);
+      ctx.scale(scale, scale);
+      ctx.drawImage(draft, -draft.width / 2, -draft.height / 2);
+      ctx.restore();
     }
 
     function setZoom(value) {
@@ -633,7 +714,7 @@
       modal.hidden = true;
       fitModal.hidden = false;
       paintFit();
-      setStatus("Arraste a foto para encaixar na moldura.");
+      setStatus("Arraste a foto para encaixar no centro da moldura.");
     }
 
     function cancelFit() {
@@ -719,6 +800,12 @@
     document.getElementById("fit-zoom").addEventListener("input", (event) => {
       if (!draft) return;
       setZoom(Number(event.target.value));
+    });
+    document.getElementById("fit-minus").addEventListener("click", () => {
+      if (draft) setZoom(zoom - 0.12);
+    });
+    document.getElementById("fit-plus").addEventListener("click", () => {
+      if (draft) setZoom(zoom + 0.12);
     });
 
     function renderBlob() {
