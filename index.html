@@ -88,7 +88,6 @@
       width: 100%;
       height: auto;
       display: block;
-      border-radius: 28px;
       touch-action: manipulation;
       user-select: none;
       -webkit-user-select: none;
@@ -349,7 +348,7 @@
       width: 100%;
       height: auto;
       border-radius: 16px;
-      background: black;
+      background: transparent;
       -webkit-touch-callout: default;
       user-select: auto;
     }
@@ -564,13 +563,6 @@
         ctx.restore();
       }
 
-      ctx.globalCompositeOperation = "destination-in";
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(maskCanvas, 0, 0, w, h);
-      ctx.imageSmoothingEnabled = true;
-      ctx.globalCompositeOperation = "destination-over";
-      ctx.fillStyle = "#000";
-      ctx.fillRect(0, 0, w, h);
       ctx.globalCompositeOperation = "source-over";
       ctx.drawImage(frameImg, 0, 0, w, h);
     }
