@@ -204,26 +204,34 @@
     .modal[hidden] { display: none; }
 
     .fit-modal {
-      z-index: 6;
-      place-items: stretch;
-      padding: 10px;
-      background: rgba(0, 0, 0, 0.88);
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      padding: 12px;
+      background: rgba(0, 0, 0, 0.92);
     }
 
+    .fit-modal[hidden] { display: none; }
+
     .fit-card {
+      width: min(420px, 100%);
       height: 100%;
       max-height: 100%;
+      margin: 0 auto;
       overflow: hidden;
       border-radius: 20px;
     }
 
     .fit-stage {
       flex: 1 1 auto;
-      min-height: 0;
+      min-height: 180px;
       width: 100%;
-      container-type: size;
-      display: grid;
-      place-items: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       cursor: grab;
       touch-action: none;
     }
@@ -231,10 +239,27 @@
     .fit-stage.is-dragging { cursor: grabbing; }
 
     .fit-stage canvas {
-      width: min(100cqi, calc(100cqb * 0.75));
-      height: auto;
+      height: 100%;
+      width: auto;
+      max-width: 100%;
+      max-height: 100%;
       border-radius: 16px;
       touch-action: none;
+    }
+
+    .fit-zoom {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 12px;
+      align-items: center;
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .fit-zoom input {
+      width: 100%;
+      accent-color: #25f4ee;
     }
 
 
@@ -317,11 +342,14 @@
 
   <div id="fit" class="modal fit-modal" hidden>
     <div class="modal-card fit-card" role="dialog" aria-modal="true" aria-labelledby="fit-title">
-      <h2 id="fit-title">Encaixe sua foto</h2>
-      <p class="help">Arraste a foto. A moldura fica fixa.</p>
+      <h2 id="fit-title">Ajuste o recorte</h2>
+      <p class="help">Arraste a foto para encaixar. A moldura fica fixa.</p>
       <div id="fit-stage" class="fit-stage">
         <canvas id="fit-canvas" width="768" height="1024" aria-label="Arraste a foto dentro da moldura"></canvas>
       </div>
+      <label class="fit-zoom">Zoom
+        <input id="fit-zoom" type="range" min="1" max="3" step="0.01" value="1" aria-label="Zoom do recorte">
+      </label>
       <button id="fit-create" class="btn btn-primary" type="button">Criar imagem</button>
       <button id="fit-cancel" class="btn btn-ghost" type="button">Cancelar</button>
     </div>
@@ -586,14 +614,22 @@
       draw(fitCtx, fitCanvas.width, fitCanvas.height, draft);
     }
 
+    function setZoom(value) {
+      zoom = Math.min(3, Math.max(1, value));
+      const slider = document.getElementById("fit-zoom");
+      if (slider) slider.value = String(zoom);
+      clampPan(draft || photo);
+      if (!fitModal.hidden && draft) paintFit();
+    }
+
     function beginFit() {
       savedPanX = panX;
       savedPanY = panY;
-      zoom = 1;
       rotation = 0;
       panX = 0;
       panY = 0;
-      clampPan(draft);
+      zoom = 1;
+      setZoom(1);
       modal.hidden = true;
       fitModal.hidden = false;
       paintFit();
@@ -623,20 +659,41 @@
 
     const fitPointers = new Map();
     let fitDragId = null;
+    let fitPinch = null;
+
+    function fitDistance() {
+      const pts = [...fitPointers.values()];
+      if (pts.length < 2) return 0;
+      return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    }
 
     fitStage.addEventListener("pointerdown", (event) => {
-      if (!draft || event.button !== 0) return;
+      if (!draft) return;
+      if (event.pointerType !== "touch" && event.button !== 0) return;
       fitPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-      fitDragId = event.pointerId;
-      fitStage.classList.add("is-dragging");
       try { fitStage.setPointerCapture(event.pointerId); } catch (error) {}
+      if (fitPointers.size === 1) {
+        fitDragId = event.pointerId;
+        fitPinch = null;
+      } else if (fitPointers.size >= 2) {
+        fitDragId = null;
+        fitPinch = { dist: fitDistance(), zoom };
+      }
+      fitStage.classList.add("is-dragging");
     });
 
     fitStage.addEventListener("pointermove", (event) => {
       const prev = fitPointers.get(event.pointerId);
-      if (!prev || fitDragId !== event.pointerId) return;
+      if (!prev || !draft) return;
       fitPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (fitPointers.size >= 2 && fitPinch && fitPinch.dist > 0) {
+        const dist = fitDistance();
+        setZoom(fitPinch.zoom * (dist / fitPinch.dist));
+        return;
+      }
+      if (fitDragId !== event.pointerId) return;
       const rect = fitCanvas.getBoundingClientRect();
+      if (!rect.width) return;
       const scale = fitCanvas.width / rect.width;
       panX += (event.clientX - prev.x) * scale;
       panY += (event.clientY - prev.y) * scale;
@@ -646,14 +703,23 @@
 
     function endFitPointer(event) {
       fitPointers.delete(event.pointerId);
+      if (fitPointers.size < 2) fitPinch = null;
       if (fitPointers.size === 0) {
         fitDragId = null;
         fitStage.classList.remove("is-dragging");
+        return;
       }
+      const [id, point] = fitPointers.entries().next().value;
+      fitDragId = id;
+      fitPointers.set(id, { x: point.x, y: point.y });
     }
 
     fitStage.addEventListener("pointerup", endFitPointer);
     fitStage.addEventListener("pointercancel", endFitPointer);
+    document.getElementById("fit-zoom").addEventListener("input", (event) => {
+      if (!draft) return;
+      setZoom(Number(event.target.value));
+    });
 
     function renderBlob() {
       const out = document.createElement("canvas");
